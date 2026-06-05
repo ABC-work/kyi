@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Talent Hunter — AI 人才猎手</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f7; color: #1d1d1f; }
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 20px; }
+    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #6e6e73; margin-bottom: 32px; }
+
+    #input-section textarea {
+      width: 100%; height: 180px; padding: 14px; font-size: 15px;
+      border: 1.5px solid #d2d2d7; border-radius: 10px; resize: vertical;
+      font-family: inherit; outline: none; transition: border-color .2s;
+    }
+    #input-section textarea:focus { border-color: #0071e3; }
+    .btn {
+      margin-top: 14px; padding: 12px 32px; background: #0071e3; color: #fff;
+      border: none; border-radius: 8px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn:hover { background: #0077ed; }
+    .btn:disabled { background: #a1c4f5; cursor: not-allowed; }
+
+    #progress-section { display: none; margin-top: 32px; }
+    .progress-bar-wrap { background: #e5e5ea; border-radius: 8px; height: 8px; overflow: hidden; margin-top: 12px; }
+    .progress-bar { height: 100%; background: #0071e3; transition: width .3s; border-radius: 8px; }
+    .progress-text { margin-top: 8px; color: #6e6e73; font-size: 14px; }
+
+    #results-section { display: none; margin-top: 32px; }
+    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .results-header h2 { font-size: 1.3rem; }
+    .export-btn { padding: 8px 20px; background: #34c759; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .export-btn:hover { background: #2fb350; }
+
+    .candidate-card {
+      background: #fff; border-radius: 12px; padding: 20px;
+      margin-bottom: 16px; display: flex; gap: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .card-body { flex: 1; }
+    .card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+    .rank { font-size: 13px; color: #6e6e73; font-weight: 600; }
+    .name a { font-size: 16px; font-weight: 700; color: #0071e3; text-decoration: none; }
+    .name a:hover { text-decoration: underline; }
+    .score-badge {
+      margin-left: auto; padding: 4px 12px; border-radius: 20px;
+      font-size: 14px; font-weight: 700; color: #fff;
+    }
+    .score-high { background: #34c759; }
+    .score-mid  { background: #ff9500; }
+    .score-low  { background: #ff3b30; }
+    .reason { color: #3d3d3f; font-size: 14px; margin-bottom: 10px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .tag-strength { background: #d1f5e0; color: #1a7a3c; }
+    .tag-gap      { background: #fde8e8; color: #9c1c1c; }
+
+    .error-msg { background: #fff2f2; border: 1px solid #ffd0d0; border-radius: 10px; padding: 16px; color: #c00; margin-top: 20px; }
+    .new-search-btn { margin-top: 20px; padding: 10px 24px; background: #f5f5f7; color: #1d1d1f; border: 1.5px solid #d2d2d7; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .new-search-btn:hover { background: #e8e8ed; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🎯 Talent Hunter</h1>
+  <p class="subtitle">粘贴岗位描述，AI 自动从 GitHub 筛选匹配人才</p>
+
+  <div id="input-section">
+    <textarea id="jd-input" placeholder="粘贴岗位描述（JD）到这里...
+
+例如：我们需要一位有 3 年以上经验的 Go 后端工程师，熟悉微服务架构、Kubernetes 容器编排，有过高并发系统设计经验优先。"></textarea>
+    <button class="btn" onclick="startSearch()">开始搜索</button>
+  </div>
+
+  <div id="progress-section">
+    <h2>正在搜索候选人...</h2>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+    </div>
+    <p class="progress-text" id="progress-text">正在解析岗位描述...</p>
+  </div>
+
+  <div id="results-section">
+    <div class="results-header">
+      <h2 id="results-title">找到 0 位候选人</h2>
+      <button class="export-btn" id="export-btn" onclick="exportCSV()">导出 CSV</button>
+    </div>
+    <div id="candidates-list"></div>
+    <button class="new-search-btn" onclick="resetSearch()">重新搜索</button>
+  </div>
+</div>
+
+<script>
+let currentJobId = null;
+let pollTimer = null;
+
+function startSearch() {
+  const jdText = document.getElementById('jd-input').value.trim();
+  if (!jdText) { alert('请先输入岗位描述'); return; }
+  document.getElementById('input-section').querySelector('.btn').disabled = true;
+  showSection('progress');
+  fetch('/api/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jd_text: jdText })
+  })
+  .then(r => r.json())
+  .then(data => { currentJobId = data.job_id; pollStatus(); })
+  .catch(err => showError('请求失败：' + err.message));
+}
+
+function pollStatus() {
+  if (!currentJobId) return;
+  fetch(`/api/status/${currentJobId}`)
+    .then(r => r.json())
+    .then(data => {
+      updateProgress(data);
+      if (data.status === 'done') { loadResults(); }
+      else if (data.status === 'error') { showError('搜索失败：' + (data.error || '未知错误')); }
+      else { pollTimer = setTimeout(pollStatus, 2000); }
+    })
+    .catch(() => { pollTimer = setTimeout(pollStatus, 3000); });
+}
+
+function updateProgress(data) {
+  const bar = document.getElementById('progress-bar');
+  const text = document.getElementById('progress-text');
+  if (data.status === 'searching') {
+    bar.style.width = '30%'; text.textContent = '正在从 GitHub 搜索候选人...';
+  } else if (data.status === 'scoring') {
+    const pct = data.total > 0 ? Math.round(30 + (data.scored / data.total) * 65) : 30;
+    bar.style.width = pct + '%';
+    text.textContent = `正在 AI 打分（${data.scored}/${data.total}）...`;
+  } else {
+    bar.style.width = '10%'; text.textContent = '正在解析岗位描述...';
+  }
+}
+
+function loadResults() {
+  fetch(`/api/results/${currentJobId}`)
+    .then(r => r.json())
+    .then(data => { document.getElementById('progress-bar').style.width = '100%'; setTimeout(() => renderResults(data), 300); })
+    .catch(err => showError('加载结果失败：' + err.message));
+}
+
+function renderResults(data) {
+  const list = document.getElementById('candidates-list');
+  document.getElementById('results-title').textContent = `找到 ${data.total} 位候选人`;
+  list.innerHTML = data.candidates.map(c => {
+    const scoreClass = c.score >= 70 ? 'score-high' : c.score >= 40 ? 'score-mid' : 'score-low';
+    const strengths = (c.strengths || []).map(s => `<span class="tag tag-strength">${s}</span>`).join('');
+    const gaps = (c.gaps || []).map(g => `<span class="tag tag-gap">${g}</span>`).join('');
+    return `<div class="candidate-card">
+      <img class="avatar" src="${c.avatar_url}" alt="${c.username}" onerror="this.src='https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'"/>
+      <div class="card-body">
+        <div class="card-top">
+          <span class="rank">#${c.rank}</span>
+          <span class="name"><a href="${c.html_url}" target="_blank">@${c.username}</a>${c.company ? ' · ' + c.company : ''}${c.location ? ' · 📍' + c.location : ''}</span>
+          <span class="score-badge ${scoreClass}">${c.score}分</span>
+        </div>
+        <p class="reason">${c.reason}</p>
+        <div class="tags">${strengths}${gaps}</div>
+      </div>
+    </div>`;
+  }).join('');
+  showSection('results');
+}
+
+function exportCSV() { if (currentJobId) window.open(`/api/export/${currentJobId}`, '_blank'); }
+
+function resetSearch() {
+  if (pollTimer) clearTimeout(pollTimer);
+  currentJobId = null;
+  document.getElementById('jd-input').value = '';
+  document.getElementById('candidates-list').innerHTML = '';
+  document.getElementById('progress-bar').style.width = '0%';
+  document.querySelector('#input-section .btn').disabled = false;
+  showSection('input');
+}
+
+function showSection(name) {
+  document.getElementById('input-section').style.display = name === 'input' ? '' : 'none';
+  document.getElementById('progress-section').style.display = name === 'progress' ? '' : 'none';
+  document.getElementById('results-section').style.display = name === 'results' ? '' : 'none';
+}
+
+function showError(msg) {
+  if (pollTimer) clearTimeout(pollTimer);
+  document.getElementById('progress-section').innerHTML =
+    `<div class="error-msg">❌ ${msg}</div><button class="new-search-btn" onclick="resetSearch()" style="margin-top:16px">重新搜索</button>`;
+}
+</script>
+</body>
+</html>
