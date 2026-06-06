@@ -43,7 +43,7 @@ def test_parse_jd_builds_github_search_query():
     result = parse_jd("some JD text", client=mock_client)
     query = result.build_github_query()
     assert "language:go" in query
-    assert "kubernetes" in query
+    assert "kubernetes" in query.lower()  # build_github_query 保留原始大小写（如 "Kubernetes"）
 
 def test_parse_jd_handles_json_with_extra_text():
     """LLM 有时会在 JSON 前后加上说明文字，确保能正确解析"""

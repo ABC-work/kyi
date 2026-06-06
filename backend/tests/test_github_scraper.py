@@ -38,16 +38,31 @@ MOCK_REPOS_RESPONSE = [
 MOCK_LANGUAGES_RESPONSE = {"Go": 85000, "Python": 10000, "Shell": 5000}
 
 @pytest.mark.asyncio
-async def test_search_users_returns_candidates():
+async def test_find_users_via_bio_returns_usernames():
+    """_find_users_via_bio 通过 GitHub user-search 返回 username 列表"""
+    from models import ParsedJD
     scraper = GitHubScraper(token="fake-token")
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=MagicMock(
-        json=MagicMock(return_value=MOCK_SEARCH_RESPONSE),
+        json=MagicMock(return_value={
+            "items": [
+                {"login": "johndoe", "type": "User"},
+                {"login": "k8s-bot", "type": "User"},   # bot — 会被过滤
+            ]
+        }),
         raise_for_status=MagicMock()
     ))
-    result = await scraper.search_users("kubernetes+language:go+followers:>5", client=mock_client)
-    assert len(result) == 1
-    assert result[0]["login"] == "johndoe"
+    parsed_jd = ParsedJD(
+        required_skills=["Kubernetes"],
+        bonus_skills=[],
+        languages=["go"],
+        min_years=3,
+        search_keywords=["kubernetes"]
+    )
+    result = await scraper._find_users_via_bio(parsed_jd, mock_client)
+    # k8s-bot 含 "-bot" 应被过滤
+    assert "johndoe" in result
+    assert "k8s-bot" not in result
 
 @pytest.mark.asyncio
 async def test_fetch_candidate_profile_returns_profile():

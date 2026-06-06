@@ -20,10 +20,9 @@ _BOT_KEYWORDS = ("-bot", "-robot", "[bot]", "ci-robot", "dependabot", "renovate"
 class GitHubScraper:
     def __init__(self, token: str = None):
         self.token = token or os.getenv("GITHUB_TOKEN", "")
-        self.headers = {
-            "Authorization": f"token {self.token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
+        self.headers = {"Accept": "application/vnd.github.v3+json"}
+        if self.token:
+            self.headers["Authorization"] = f"token {self.token}"
 
     def _make_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(headers=self.headers, timeout=15.0)
