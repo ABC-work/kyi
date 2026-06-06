@@ -193,6 +193,29 @@
     .score-section-title { font-size: 13px; font-weight: 700; color: #0071e3; margin-bottom: 10px; }
     .score-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .lookup-error { background: #fff2f2; border: 1px solid #ffd0d0; border-radius: 10px; padding: 16px; color: #c00; margin-top: 20px; }
+
+    /* ── Dual-source layout ── */
+    .profile-columns { display: flex; gap: 20px; align-items: flex-start; }
+    .profile-column  { flex: 1; min-width: 0; }
+    .platform-label  {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700; padding: 3px 10px;
+      border-radius: 4px; margin-bottom: 12px;
+    }
+    .platform-github { background: #f0f0f0; color: #1d1d1f; }
+    .platform-gitee  { background: #fde8e8; color: #c7262e; }
+
+    /* Disambiguation source badge */
+    .candidate-source {
+      font-size: 11px; padding: 1px 6px; border-radius: 3px;
+      font-weight: 600; margin-left: 6px;
+    }
+    .source-github { background: #e8f0fe; color: #1558d6; }
+    .source-gitee  { background: #fde8e8; color: #c7262e; }
+
+    @media (max-width: 600px) {
+      .profile-columns { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
@@ -274,6 +297,7 @@
 let currentJobId = null;
 let pollTimer = null;
 let knownUsernames = new Set();
+let currentPreferSource = '';
 
 // 页面加载时确保显示输入区
 document.addEventListener('DOMContentLoaded', () => showSection('input'));
@@ -516,20 +540,23 @@ function submitLookup() {
   document.getElementById('profile-result').innerHTML =
     '<div class="live-status"><div class="spinner"></div><span>正在查询...</span></div>';
 
+  var preferSource = currentPreferSource;
+  currentPreferSource = '';
+
   fetch('/api/lookup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, jd_text: jdText })
+    body: JSON.stringify({ query, jd_text: jdText, prefer_source: preferSource })
   })
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(data => {
     btn.disabled = false;
     btn.textContent = '查询';
     if (data.status === 'found') {
-      document.getElementById('profile-result').innerHTML = renderProfileCard(data.profile, data.score_result, data.score_error);
+      renderDualProfile(data.github, data.gitee, data.score_result, data.score_error);
     } else if (data.status === 'ambiguous') {
       document.getElementById('profile-result').innerHTML = '';
-      renderDisambig(data.candidates, jdText);
+      renderDisambig(data.candidates);
     } else {
       document.getElementById('profile-result').innerHTML =
         '<div class="lookup-error">❌ 未找到该用户，请检查用户名是否正确</div>';
@@ -543,22 +570,27 @@ function submitLookup() {
   });
 }
 
-function renderDisambig(candidates, jdText) {
+function renderDisambig(candidates) {
   const list = document.getElementById('disambig-list');
   list.style.display = '';
   list.innerHTML = '<p style="font-size:14px;color:#6e6e73;margin-bottom:12px;">找到 ' + candidates.length + ' 个匹配用户，请选择：</p>' +
     candidates.map(function(c) {
-      return '<div class="disambig-item" onclick="pickDisambig(\'' + c.login.replace(/['"\\]/g, '') + '\')">' +
+      var sourceClass = c.source === 'gitee' ? 'source-gitee' : 'source-github';
+      var sourceLabel = c.source === 'gitee' ? 'Gitee' : 'GitHub';
+      var safeLogin = escapeHtml(c.login);
+      var safeSource = escapeHtml(c.source || 'github');
+      return '<div class="disambig-item" onclick="pickDisambig(\'' + c.login.replace(/['"\\]/g, '') + '\', \'' + (c.source || 'github').replace(/['"\\]/g, '') + '\')">' +
         '<img class="disambig-avatar" src="' + c.avatar_url + '" onerror="this.src=\'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\'" />' +
-        '<div><div class="disambig-login">@' + escapeHtml(c.login) + '</div>' +
+        '<div><div class="disambig-login">@' + safeLogin + '<span class="candidate-source ' + sourceClass + '">' + sourceLabel + '</span></div>' +
         (c.bio ? '<div class="disambig-bio">' + escapeHtml(c.bio.substring(0, 80)) + '</div>' : '') +
         '</div></div>';
     }).join('');
 }
 
-function pickDisambig(login) {
+function pickDisambig(login, source) {
   document.getElementById('lookup-query').value = login;
   document.getElementById('disambig-list').style.display = 'none';
+  currentPreferSource = source || '';
   submitLookup();
 }
 
@@ -619,6 +651,85 @@ function renderProfileCard(profile, scoreResult, scoreError) {
     (repoItems ? '<div class="profile-section"><div class="profile-section-title">代表项目</div><div class="repo-list">' + repoItems + '</div></div>' : '') +
     scoreHtml +
     '</div>';
+}
+
+// ── Profile card without score (used inside dual-column layout) ──────────────
+function renderProfileCardInner(profile) {
+  var langs = Object.entries(profile.languages || {}).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
+  var total = langs.reduce(function(s, kv) { return s + kv[1]; }, 0) || 1;
+  var langBars = langs.map(function(kv) {
+    var pct = Math.round(kv[1] * 100 / total);
+    return '<div class="lang-row"><span class="lang-name">' + escapeHtml(kv[0]) + '</span>' +
+      '<div class="lang-bar-bg"><div class="lang-bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<span class="lang-pct">' + pct + '%</span></div>';
+  }).join('');
+
+  var repoItems = (profile.top_repos || []).map(function(r) {
+    return '<div class="repo-item"><div class="repo-item-top">' +
+      '<a class="repo-item-name" href="' + profile.html_url + '/' + encodeURIComponent(r.name) + '" target="_blank">' + escapeHtml(r.name) + '</a>' +
+      '<span class="repo-item-stars">⭐ ' + (r.stars || 0).toLocaleString() + '</span></div>' +
+      (r.description ? '<div class="repo-item-desc">' + escapeHtml(r.description.substring(0, 80)) + '</div>' : '') +
+      '</div>';
+  }).join('');
+
+  var metaParts = [];
+  if (profile.location) metaParts.push('📍 ' + escapeHtml(profile.location));
+  if (profile.company)  metaParts.push('🏢 ' + escapeHtml(profile.company));
+  if (profile.blog)     metaParts.push('🔗 <a href="' + profile.blog + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(profile.blog.replace(/^https?:\/\//, '')) + '</a>');
+  metaParts.push('👥 ' + (profile.followers || 0).toLocaleString() + ' followers');
+  metaParts.push('📦 ' + (profile.public_repos || 0) + ' repos');
+  if (profile.last_active) metaParts.push('🕐 最近活跃 ' + profile.last_active);
+
+  var displayName = profile.display_name
+    ? escapeHtml(profile.display_name) + ' (@' + escapeHtml(profile.username) + ')'
+    : '@' + escapeHtml(profile.username);
+
+  return '<div class="profile-card">' +
+    '<div class="profile-header">' +
+    '<img class="profile-avatar" src="' + profile.avatar_url + '" onerror="this.src=\'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\'" />' +
+    '<div><div class="profile-name"><a href="' + profile.html_url + '" target="_blank">' + displayName + '</a></div>' +
+    '<div class="profile-meta">' + metaParts.join(' · ') + '</div>' +
+    (profile.bio ? '<div class="profile-bio">' + escapeHtml(profile.bio) + '</div>' : '') +
+    '</div></div>' +
+    (langs.length ? '<div class="profile-section"><div class="profile-section-title">编程语言分布</div><div class="lang-bars">' + langBars + '</div></div>' : '') +
+    (repoItems ? '<div class="profile-section"><div class="profile-section-title">代表项目</div><div class="repo-list">' + repoItems + '</div></div>' : '') +
+    '</div>';
+}
+
+// ── Score section HTML helper ────────────────────────────────────────────────
+function renderScoreHtml(scoreResult, scoreError) {
+  if (scoreResult) {
+    var scoreClass = scoreResult.score >= 80 ? 'score-high' : scoreResult.score >= 60 ? 'score-mid' : 'score-low';
+    var tierClass  = scoreResult.score >= 60 ? 'tier-recommend' : scoreResult.score >= 40 ? 'tier-backup' : 'tier-ref';
+    var tierLabel  = scoreResult.score >= 60 ? '推荐' : scoreResult.score >= 40 ? '可备选' : '仅供参考';
+    var strengths  = (scoreResult.strengths || []).map(function(s) { return '<span class="tag tag-strength">' + escapeHtml(s) + '</span>'; }).join('');
+    var gaps       = (scoreResult.gaps || []).map(function(g) { return '<span class="tag tag-gap">' + escapeHtml(g) + '</span>'; }).join('');
+    return '<div class="score-section" style="margin-top:20px"><div class="score-section-title">岗位匹配分析</div>' +
+      '<div class="score-row"><span class="score-badge ' + scoreClass + '">' + scoreResult.score + '分</span>' +
+      '<span class="tier-badge ' + tierClass + '">' + tierLabel + '</span></div>' +
+      '<p class="reason">' + escapeHtml(scoreResult.reason) + '</p>' +
+      '<div class="tags">' + strengths + gaps + '</div></div>';
+  } else if (scoreError) {
+    return '<div class="lookup-error" style="margin-top:12px">⚠️ 评分提示：' + escapeHtml(scoreError) + '</div>';
+  }
+  return '';
+}
+
+// ── Dual-source profile renderer (GitHub + Gitee side by side) ───────────────
+function renderDualProfile(github, gitee, scoreResult, scoreError) {
+  var html = '';
+  if (github && gitee) {
+    html += '<div class="profile-columns">' +
+      '<div class="profile-column"><span class="platform-label platform-github">GitHub</span>' + renderProfileCardInner(github) + '</div>' +
+      '<div class="profile-column"><span class="platform-label platform-gitee">Gitee</span>' + renderProfileCardInner(gitee) + '</div>' +
+      '</div>';
+  } else if (github) {
+    html += '<span class="platform-label platform-github">GitHub</span>' + renderProfileCardInner(github);
+  } else if (gitee) {
+    html += '<span class="platform-label platform-gitee">Gitee</span>' + renderProfileCardInner(gitee);
+  }
+  html += renderScoreHtml(scoreResult, scoreError);
+  document.getElementById('profile-result').innerHTML = html;
 }
 
 function showError(msg) {
