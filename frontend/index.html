@@ -493,6 +493,14 @@ function switchTab(tab) {
   if (isSearch) showSection('input');
 }
 
+// ── HTML escaping helper (prevents XSS from API-returned data) ───────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  var div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
 // ── 查人功能 ────────────────────────────────────────────────────────────────
 
 function submitLookup() {
@@ -531,7 +539,7 @@ function submitLookup() {
     btn.disabled = false;
     btn.textContent = '查询';
     document.getElementById('profile-result').innerHTML =
-      '<div class="lookup-error">❌ 请求失败：' + err.message + '</div>';
+      '<div class="lookup-error">❌ 请求失败：' + escapeHtml(err.message) + '</div>';
   });
 }
 
@@ -540,10 +548,10 @@ function renderDisambig(candidates, jdText) {
   list.style.display = '';
   list.innerHTML = '<p style="font-size:14px;color:#6e6e73;margin-bottom:12px;">找到 ' + candidates.length + ' 个匹配用户，请选择：</p>' +
     candidates.map(function(c) {
-      return '<div class="disambig-item" onclick="pickDisambig(\'' + c.login.replace(/'/g, "\\'") + '\')">' +
+      return '<div class="disambig-item" onclick="pickDisambig(\'' + c.login.replace(/['"\\]/g, '') + '\')">' +
         '<img class="disambig-avatar" src="' + c.avatar_url + '" onerror="this.src=\'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\'" />' +
-        '<div><div class="disambig-login">@' + c.login + '</div>' +
-        (c.bio ? '<div class="disambig-bio">' + c.bio.substring(0, 80) + '</div>' : '') +
+        '<div><div class="disambig-login">@' + escapeHtml(c.login) + '</div>' +
+        (c.bio ? '<div class="disambig-bio">' + escapeHtml(c.bio.substring(0, 80)) + '</div>' : '') +
         '</div></div>';
     }).join('');
 }
@@ -560,7 +568,7 @@ function renderProfileCard(profile, scoreResult, scoreError) {
   var total = langs.reduce(function(s, kv) { return s + kv[1]; }, 0) || 1;
   var langBars = langs.map(function(kv) {
     var pct = Math.round(kv[1] * 100 / total);
-    return '<div class="lang-row"><span class="lang-name">' + kv[0] + '</span>' +
+    return '<div class="lang-row"><span class="lang-name">' + escapeHtml(kv[0]) + '</span>' +
       '<div class="lang-bar-bg"><div class="lang-bar-fill" style="width:' + pct + '%"></div></div>' +
       '<span class="lang-pct">' + pct + '%</span></div>';
   }).join('');
@@ -568,9 +576,9 @@ function renderProfileCard(profile, scoreResult, scoreError) {
   // Repos
   var repoItems = (profile.top_repos || []).map(function(r) {
     return '<div class="repo-item"><div class="repo-item-top">' +
-      '<a class="repo-item-name" href="' + profile.html_url + '/' + r.name + '" target="_blank">' + r.name + '</a>' +
+      '<a class="repo-item-name" href="' + profile.html_url + '/' + encodeURIComponent(r.name) + '" target="_blank">' + escapeHtml(r.name) + '</a>' +
       '<span class="repo-item-stars">⭐ ' + (r.stars || 0).toLocaleString() + '</span></div>' +
-      (r.description ? '<div class="repo-item-desc">' + r.description.substring(0, 80) + '</div>' : '') +
+      (r.description ? '<div class="repo-item-desc">' + escapeHtml(r.description.substring(0, 80)) + '</div>' : '') +
       '</div>';
   }).join('');
 
@@ -580,12 +588,12 @@ function renderProfileCard(profile, scoreResult, scoreError) {
     var scoreClass = scoreResult.score >= 80 ? 'score-high' : scoreResult.score >= 60 ? 'score-mid' : 'score-low';
     var tierClass  = scoreResult.score >= 60 ? 'tier-recommend' : scoreResult.score >= 40 ? 'tier-backup' : 'tier-ref';
     var tierLabel  = scoreResult.score >= 60 ? '推荐' : scoreResult.score >= 40 ? '可备选' : '仅供参考';
-    var strengths  = (scoreResult.strengths || []).map(function(s) { return '<span class="tag tag-strength">' + s + '</span>'; }).join('');
-    var gaps       = (scoreResult.gaps || []).map(function(g) { return '<span class="tag tag-gap">' + g + '</span>'; }).join('');
+    var strengths  = (scoreResult.strengths || []).map(function(s) { return '<span class="tag tag-strength">' + escapeHtml(s) + '</span>'; }).join('');
+    var gaps       = (scoreResult.gaps || []).map(function(g) { return '<span class="tag tag-gap">' + escapeHtml(g) + '</span>'; }).join('');
     scoreHtml = '<div class="score-section"><div class="score-section-title">岗位匹配分析</div>' +
       '<div class="score-row"><span class="score-badge ' + scoreClass + '">' + scoreResult.score + '分</span>' +
       '<span class="tier-badge ' + tierClass + '">' + tierLabel + '</span></div>' +
-      '<p class="reason">' + scoreResult.reason + '</p>' +
+      '<p class="reason">' + escapeHtml(scoreResult.reason) + '</p>' +
       '<div class="tags">' + strengths + gaps + '</div></div>';
   } else if (scoreError) {
     scoreHtml = '<div class="lookup-error" style="margin-top:12px">⚠️ 评分失败：' + scoreError + '</div>';
@@ -593,9 +601,9 @@ function renderProfileCard(profile, scoreResult, scoreError) {
 
   // Meta row
   var metaParts = [];
-  if (profile.location) metaParts.push('📍 ' + profile.location);
-  if (profile.company)  metaParts.push('🏢 ' + profile.company);
-  if (profile.blog)     metaParts.push('🔗 <a href="' + profile.blog + '" target="_blank">' + profile.blog.replace(/^https?:\/\//, '') + '</a>');
+  if (profile.location) metaParts.push('📍 ' + escapeHtml(profile.location));
+  if (profile.company)  metaParts.push('🏢 ' + escapeHtml(profile.company));
+  if (profile.blog)     metaParts.push('🔗 <a href="' + profile.blog + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(profile.blog.replace(/^https?:\/\//, '')) + '</a>');
   metaParts.push('👥 ' + (profile.followers || 0).toLocaleString() + ' followers');
   metaParts.push('📦 ' + (profile.public_repos || 0) + ' repos');
   if (profile.last_active) metaParts.push('🕐 最近活跃 ' + profile.last_active);
@@ -603,9 +611,9 @@ function renderProfileCard(profile, scoreResult, scoreError) {
   return '<div class="profile-card">' +
     '<div class="profile-header">' +
     '<img class="profile-avatar" src="' + profile.avatar_url + '" onerror="this.src=\'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png\'" />' +
-    '<div><div class="profile-name"><a href="' + profile.html_url + '" target="_blank">@' + profile.username + '</a></div>' +
+    '<div><div class="profile-name"><a href="' + profile.html_url + '" target="_blank">@' + escapeHtml(profile.username) + '</a></div>' +
     '<div class="profile-meta">' + metaParts.join(' · ') + '</div>' +
-    (profile.bio ? '<div class="profile-bio">' + profile.bio + '</div>' : '') +
+    (profile.bio ? '<div class="profile-bio">' + escapeHtml(profile.bio) + '</div>' : '') +
     '</div></div>' +
     (langs.length ? '<div class="profile-section"><div class="profile-section-title">编程语言分布</div><div class="lang-bars">' + langBars + '</div></div>' : '') +
     (repoItems ? '<div class="profile-section"><div class="profile-section-title">代表项目</div><div class="repo-list">' + repoItems + '</div></div>' : '') +
