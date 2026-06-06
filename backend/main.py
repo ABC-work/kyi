@@ -396,10 +396,20 @@ async def post_lookup(req: LookupRequest):
     async with gh_scraper._make_client() as gh_client, \
                gt_scraper._make_client() as gt_client:
 
-        (gh_profile, gh_candidates), (gt_profile, gt_candidates) = await asyncio.gather(
-            _resolve_github(query, prefer, gh_scraper, gh_client),
-            _resolve_gitee(query, prefer, gt_scraper, gt_client),
-        )
+        try:
+            (gh_profile, gh_candidates), (gt_profile, gt_candidates) = await asyncio.gather(
+                _resolve_github(query, prefer, gh_scraper, gh_client),
+                _resolve_gitee(query, prefer, gt_scraper, gt_client),
+            )
+        except Exception as exc:
+            return {
+                "status": "not_found",
+                "github": None,
+                "gitee": None,
+                "score_result": None,
+                "score_error": f"查询失败：{str(exc)[:100]}",
+                "candidates": [],
+            }
 
     all_candidates = gh_candidates + gt_candidates
 
