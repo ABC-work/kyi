@@ -114,12 +114,100 @@
     .new-search-btn:hover { background: #e8e8ed; }
 
     .error-msg { background: #fff2f2; border: 1px solid #ffd0d0; border-radius: 10px; padding: 16px; color: #c00; margin-top: 20px; }
+
+    /* ── Tab 导航 ── */
+    .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 2px solid #d2d2d7; }
+    .tab-btn {
+      padding: 10px 24px; border: none; background: none; cursor: pointer;
+      font-size: 15px; font-weight: 600; color: #6e6e73;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color .15s, border-color .15s;
+    }
+    .tab-btn.active { color: #0071e3; border-bottom-color: #0071e3; }
+    .tab-btn:hover:not(.active) { color: #1d1d1f; }
+
+    /* ── 查人区域 ── */
+    #lookup-section { display: none; }
+    .lookup-form { display: flex; flex-direction: column; gap: 12px; }
+    .lookup-input {
+      width: 100%; padding: 14px; font-size: 15px;
+      border: 2px solid #c7c7cc; border-radius: 10px;
+      font-family: inherit; outline: none; transition: border-color .2s;
+      background: #fff; color: #1d1d1f;
+    }
+    .lookup-input:focus { border-color: #0071e3; }
+    .lookup-jd {
+      width: 100%; height: 120px; padding: 14px; font-size: 14px;
+      border: 2px solid #c7c7cc; border-radius: 10px; resize: vertical;
+      font-family: inherit; outline: none; transition: border-color .2s;
+      background: #fff; color: #1d1d1f;
+    }
+    .lookup-jd:focus { border-color: #0071e3; }
+    .lookup-jd-label { font-size: 13px; color: #6e6e73; margin-bottom: -4px; }
+
+    /* ── 歧义候选列表 ── */
+    .disambig-list { margin-top: 20px; }
+    .disambig-item {
+      display: flex; align-items: center; gap: 12px;
+      background: #fff; border-radius: 10px; padding: 14px 16px;
+      margin-bottom: 10px; cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+      transition: box-shadow .15s;
+    }
+    .disambig-item:hover { box-shadow: 0 3px 10px rgba(0,0,0,.12); }
+    .disambig-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .disambig-login { font-weight: 700; font-size: 14px; color: #0071e3; }
+    .disambig-bio { font-size: 13px; color: #6e6e73; margin-top: 2px; }
+
+    /* ── 画像卡片（查人结果）── */
+    #profile-result { margin-top: 24px; }
+    .profile-card {
+      background: #fff; border-radius: 14px; padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    .profile-header { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
+    .profile-avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+    .profile-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .profile-name a { color: #0071e3; text-decoration: none; }
+    .profile-name a:hover { text-decoration: underline; }
+    .profile-meta { font-size: 13px; color: #6e6e73; line-height: 1.8; }
+    .profile-bio { font-size: 14px; color: #3d3d3f; margin-top: 6px; }
+    .profile-section { margin-top: 16px; }
+    .profile-section-title { font-size: 12px; font-weight: 700; color: #6e6e73; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+    .lang-bars { display: flex; flex-direction: column; gap: 6px; }
+    .lang-row { display: flex; align-items: center; gap: 8px; }
+    .lang-name { font-size: 13px; width: 100px; flex-shrink: 0; }
+    .lang-bar-bg { flex: 1; background: #e5e5ea; border-radius: 4px; height: 8px; overflow: hidden; }
+    .lang-bar-fill { height: 100%; background: #0071e3; border-radius: 4px; }
+    .lang-pct { font-size: 12px; color: #6e6e73; width: 36px; text-align: right; flex-shrink: 0; }
+    .repo-list { display: flex; flex-direction: column; gap: 8px; }
+    .repo-item { background: #f5f5f7; border-radius: 8px; padding: 10px 14px; }
+    .repo-item-top { display: flex; align-items: center; gap: 8px; }
+    .repo-item-name { font-weight: 600; font-size: 14px; color: #0071e3; text-decoration: none; }
+    .repo-item-stars { font-size: 13px; color: #6e6e73; }
+    .repo-item-desc { font-size: 13px; color: #6e6e73; margin-top: 3px; }
+    .score-section {
+      margin-top: 20px; padding: 16px 20px;
+      background: #f0f7ff; border-radius: 10px; border: 1px solid #b3d4f5;
+    }
+    .score-section-title { font-size: 13px; font-weight: 700; color: #0071e3; margin-bottom: 10px; }
+    .score-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .lookup-error { background: #fff2f2; border: 1px solid #ffd0d0; border-radius: 10px; padding: 16px; color: #c00; margin-top: 20px; }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>🎯 Talent Hunter</h1>
-  <p class="subtitle">粘贴岗位描述，AI 自动从 GitHub 实时筛选匹配人才</p>
+  <p class="subtitle">AI 驱动的开发者人才搜索与画像工具</p>
+
+  <!-- Tab 导航 -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-search" onclick="switchTab('search')">🔍 搜职位</button>
+    <button class="tab-btn" id="tab-lookup" onclick="switchTab('lookup')">👤 查人</button>
+  </div>
+
+  <!-- 搜职位内容区 -->
+  <div id="search-tab-content">
 
   <!-- 输入区 -->
   <div id="input-section">
@@ -158,6 +246,28 @@
     <div id="candidates-list"></div>
     <button class="new-search-btn" onclick="resetSearch()">🔄 重新搜索</button>
   </div>
+
+  </div><!-- /search-tab-content -->
+
+  <!-- 查人区域 -->
+  <div id="lookup-section">
+    <div class="lookup-form">
+      <input class="lookup-input" id="lookup-query" type="text"
+             placeholder="GitHub 用户名 或 真实姓名（如 gaearon、Dan Abramov）"
+             onkeydown="if(event.key==='Enter') submitLookup()" />
+      <span class="lookup-jd-label">对照岗位（可选）— 填写后同时输出与该岗位的匹配分</span>
+      <textarea class="lookup-jd" id="lookup-jd"
+                placeholder="粘贴岗位描述（选填）..."></textarea>
+      <button class="btn" id="lookup-btn" onclick="submitLookup()">查询</button>
+    </div>
+
+    <!-- 歧义消解列表 -->
+    <div class="disambig-list" id="disambig-list" style="display:none"></div>
+
+    <!-- 画像结果 -->
+    <div id="profile-result"></div>
+  </div>
+
 </div>
 
 <script>
