@@ -260,8 +260,16 @@ async def post_search(req: SearchRequest, background_tasks: BackgroundTasks):
 import re as _re_lookup
 
 def _looks_like_username(q: str) -> bool:
-    """True if query looks like a GitHub username (no spaces, ASCII, ≤39 chars)."""
-    return bool(q) and len(q) <= 39 and bool(_re_lookup.match(r'^[A-Za-z0-9\-]+$', q))
+    """True if query looks like a GitHub username.
+    GitHub rules: alphanumeric + hyphens, no leading/trailing hyphens, ≤39 chars.
+    """
+    return (
+        bool(q)
+        and len(q) <= 39
+        and not q.startswith('-')
+        and not q.endswith('-')
+        and bool(_re_lookup.match(r'^[A-Za-z0-9\-]+$', q))
+    )
 
 
 @app.post("/api/lookup")
@@ -319,6 +327,8 @@ async def post_lookup(req: LookupRequest):
                     for u in items[:5]
                     if u.get("type") == "User"
                 ]
+                if not candidates:
+                    return {"status": "not_found", "profile": None, "score_result": None, "candidates": []}
                 return {"status": "ambiguous", "profile": None, "score_result": None, "candidates": candidates}
 
         # Phase 3: optional JD scoring
