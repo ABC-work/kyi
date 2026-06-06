@@ -12,7 +12,7 @@ from openai import OpenAI
 
 from job_store import job_store
 from jd_parser import parse_jd
-from github_scraper import GitHubScraper
+from github_scraper import GitHubScraper, GITHUB_API
 from scorer import score_candidate
 from models import JobStatus, ScoredCandidate
 
@@ -27,6 +27,10 @@ if os.path.exists(frontend_dir):
 
 class SearchRequest(BaseModel):
     jd_text: str
+
+class LookupRequest(BaseModel):
+    query: str          # GitHub username or real name
+    jd_text: str = ""   # optional JD for matching score
 
 def _skill_gap_cap(result, parsed_jd) -> int:
     """核心技能缺失时强制压到 59 分以下（会被 ≥60 过滤掉）。
@@ -252,6 +256,116 @@ async def post_search(req: SearchRequest, background_tasks: BackgroundTasks):
     job_id = job_store.create_job()
     background_tasks.add_task(run_pipeline, job_id, req.jd_text)
     return {"job_id": job_id}
+
+import re as _re_lookup
+
+def _looks_like_username(q: str) -> bool:
+    """True if query looks like a GitHub username (no spaces, ASCII, ≤39 chars)."""
+    return bool(q) and len(q) <= 39 and bool(_re_lookup.match(r'^[A-Za-z0-9\-]+$', q))
+
+
+@app.post("/api/lookup")
+async def post_lookup(req: LookupRequest):
+    import httpx as _httpx
+    query = req.query.strip()
+    jd_text = req.jd_text.strip()
+
+    groq_client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url="https://api.groq.com/openai/v1")
+    scraper = GitHubScraper(token=os.getenv("GITHUB_TOKEN"))
+
+    async with scraper._make_client() as gh_client:
+        # Phase 1: resolve username
+        if _looks_like_username(query):
+            try:
+                profile = await scraper.fetch_candidate_profile(query, client=gh_client)
+            except _httpx.HTTPStatusError as e:
+                if e.response.status_code == 404:
+                    profile = None
+                else:
+                    raise HTTPException(status_code=502, detail=f"GitHub API error: {e.response.status_code}")
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=str(e))
+        else:
+            profile = None
+
+        # Phase 2: search if direct fetch failed or query is a real name
+        if profile is None:
+            try:
+                resp = await gh_client.get(
+                    f"{GITHUB_API}/search/users",
+                    params={"q": query, "per_page": 5}
+                )
+                resp.raise_for_status()
+                items = resp.json().get("items", [])
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"GitHub search error: {str(e)}")
+
+            if not items:
+                return {"status": "not_found", "profile": None, "score_result": None, "candidates": []}
+
+            if len(items) == 1 or (items and _looks_like_username(query) and items[0]["login"].lower() == query.lower()):
+                try:
+                    profile = await scraper.fetch_candidate_profile(items[0]["login"], client=gh_client)
+                except Exception as e:
+                    raise HTTPException(status_code=502, detail=str(e))
+            else:
+                candidates = [
+                    {
+                        "login": u["login"],
+                        "avatar_url": u.get("avatar_url", ""),
+                        "html_url": u.get("html_url", ""),
+                        "bio": u.get("bio") or "",
+                    }
+                    for u in items[:5]
+                    if u.get("type") == "User"
+                ]
+                return {"status": "ambiguous", "profile": None, "score_result": None, "candidates": candidates}
+
+        # Phase 3: optional JD scoring
+        score_result = None
+        score_error = None
+        if jd_text:
+            try:
+                parsed_jd = await asyncio.to_thread(parse_jd, jd_text, groq_client)
+                scored = await asyncio.to_thread(score_candidate, profile, parsed_jd, groq_client)
+                scored.score = _language_cap(scored, parsed_jd)
+                scored.score = _skill_gap_cap(scored, parsed_jd)
+                scored.score = _adjusted_score(scored)
+                score_result = {
+                    "score": scored.score,
+                    "reason": scored.reason,
+                    "strengths": scored.strengths,
+                    "gaps": scored.gaps,
+                }
+            except Exception as e:
+                score_error = str(e)[:120]
+
+        profile_dict = {
+            "username": profile.username,
+            "avatar_url": profile.avatar_url,
+            "html_url": profile.html_url,
+            "bio": profile.bio,
+            "location": profile.location,
+            "company": profile.company,
+            "blog": profile.blog,
+            "public_repos": profile.public_repos,
+            "followers": profile.followers,
+            "languages": profile.languages,
+            "top_repos": [
+                {"name": r.name, "description": r.description, "stars": r.stars, "topics": r.topics}
+                for r in profile.top_repos
+            ],
+            "last_active": profile.last_active,
+        }
+
+        return {
+            "status": "found",
+            "profile": profile_dict,
+            "score_result": score_result,
+            "score_error": score_error,
+            "candidates": [],
+        }
+
 
 def _candidate_tier(score: int) -> str:
     if score >= 60:  return "推荐"
