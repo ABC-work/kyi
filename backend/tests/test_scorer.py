@@ -12,6 +12,17 @@ MOCK_SCORE_RESPONSE = '''{
   "gaps": ["缺少金融领域背景"]
 }'''
 
+def _make_openai_mock(text):
+    mock_client = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.content = text
+    mock_choice = MagicMock()
+    mock_choice.message = mock_msg
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_client.chat.completions.create.return_value = mock_response
+    return mock_client
+
 def _make_candidate():
     return CandidateProfile(
         username="johndoe",
@@ -33,10 +44,7 @@ def _make_parsed_jd():
     )
 
 def test_score_candidate_returns_scored_candidate():
-    mock_client = MagicMock()
-    mock_client.messages.create.return_value = MagicMock(
-        content=[MagicMock(text=MOCK_SCORE_RESPONSE)]
-    )
+    mock_client = _make_openai_mock(MOCK_SCORE_RESPONSE)
     result = score_candidate(_make_candidate(), _make_parsed_jd(), client=mock_client)
     assert isinstance(result, ScoredCandidate)
     assert result.score == 82
@@ -45,10 +53,7 @@ def test_score_candidate_returns_scored_candidate():
     assert len(result.gaps) == 1
 
 def test_score_candidate_preserves_profile_fields():
-    mock_client = MagicMock()
-    mock_client.messages.create.return_value = MagicMock(
-        content=[MagicMock(text=MOCK_SCORE_RESPONSE)]
-    )
+    mock_client = _make_openai_mock(MOCK_SCORE_RESPONSE)
     candidate = _make_candidate()
     result = score_candidate(candidate, _make_parsed_jd(), client=mock_client)
     assert result.html_url == candidate.html_url

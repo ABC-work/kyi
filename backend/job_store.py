@@ -30,6 +30,15 @@ class JobStore:
             job.scored = scored
         if total is not None:
             job.total = total
+        # 后端兜底：scored == total 时主动设为 done，防止 set_results 调用前的窗口期
+        if job.total > 0 and job.scored >= job.total and job.status == JobStatus.SCORING:
+            job.status = JobStatus.DONE
+
+    def add_result(self, job_id: str, result) -> None:
+        """实时追加单个打分结果"""
+        job = self._jobs.get(job_id)
+        if job:
+            job.results.append(result)
 
     def set_results(self, job_id: str, results: list) -> None:
         job = self._jobs.get(job_id)

@@ -13,8 +13,9 @@
 
     #input-section textarea {
       width: 100%; height: 180px; padding: 14px; font-size: 15px;
-      border: 1.5px solid #d2d2d7; border-radius: 10px; resize: vertical;
+      border: 2px solid #c7c7cc; border-radius: 10px; resize: vertical;
       font-family: inherit; outline: none; transition: border-color .2s;
+      background: #ffffff; color: #1d1d1f; display: block;
     }
     #input-section textarea:focus { border-color: #0071e3; }
     .btn {
@@ -25,51 +26,102 @@
     .btn:hover { background: #0077ed; }
     .btn:disabled { background: #a1c4f5; cursor: not-allowed; }
 
+    /* ── 进度区域 ── */
     #progress-section { display: none; margin-top: 32px; }
-    .progress-bar-wrap { background: #e5e5ea; border-radius: 8px; height: 8px; overflow: hidden; margin-top: 12px; }
-    .progress-bar { height: 100%; background: #0071e3; transition: width .3s; border-radius: 8px; }
-    .progress-text { margin-top: 8px; color: #6e6e73; font-size: 14px; }
+    .progress-bar-wrap { background: #e5e5ea; border-radius: 8px; height: 8px; overflow: hidden; margin: 12px 0 6px; }
+    .progress-bar { height: 100%; background: #0071e3; transition: width .4s ease; border-radius: 8px; }
+    .progress-text { color: #6e6e73; font-size: 14px; }
 
-    #results-section { display: none; margin-top: 32px; }
-    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .results-header h2 { font-size: 1.3rem; }
-    .export-btn { padding: 8px 20px; background: #34c759; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-    .export-btn:hover { background: #2fb350; }
+    /* 实时打分状态行 */
+    .live-status {
+      display: flex; align-items: center; gap: 10px;
+      background: #fff; border-radius: 10px; padding: 12px 16px;
+      margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.07);
+      font-size: 14px; color: #3d3d3f;
+    }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid #e5e5ea;
+      border-top-color: #0071e3; border-radius: 50%;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .live-avatar {
+      width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+    }
+    .live-name { font-weight: 600; color: #0071e3; }
+
+    /* ── 候选人卡片 ── */
+    #live-candidates { margin-top: 20px; }
+    .section-title {
+      font-size: 1rem; font-weight: 700; color: #6e6e73;
+      margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em;
+    }
 
     .candidate-card {
       background: #fff; border-radius: 12px; padding: 20px;
-      margin-bottom: 16px; display: flex; gap: 16px;
+      margin-bottom: 14px; display: flex; gap: 16px;
       box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      opacity: 0; transform: translateY(12px);
+      transition: opacity .35s ease, transform .35s ease;
     }
+    .candidate-card.visible { opacity: 1; transform: translateY(0); }
     .avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-    .card-body { flex: 1; }
-    .card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-    .rank { font-size: 13px; color: #6e6e73; font-weight: 600; }
-    .name a { font-size: 16px; font-weight: 700; color: #0071e3; text-decoration: none; }
+    .card-body { flex: 1; min-width: 0; }
+    .card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .rank { font-size: 13px; color: #6e6e73; font-weight: 600; flex-shrink: 0; }
+    .name { font-size: 15px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .name a { color: #0071e3; text-decoration: none; }
     .name a:hover { text-decoration: underline; }
     .score-badge {
-      margin-left: auto; padding: 4px 12px; border-radius: 20px;
+      flex-shrink: 0; padding: 3px 12px; border-radius: 20px;
       font-size: 14px; font-weight: 700; color: #fff;
     }
     .score-high { background: #34c759; }
     .score-mid  { background: #ff9500; }
     .score-low  { background: #ff3b30; }
-    .reason { color: #3d3d3f; font-size: 14px; margin-bottom: 10px; }
+    .reason { color: #3d3d3f; font-size: 14px; margin-bottom: 8px; line-height: 1.5; }
     .tags { display: flex; flex-wrap: wrap; gap: 6px; }
     .tag { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
     .tag-strength { background: #d1f5e0; color: #1a7a3c; }
     .tag-gap      { background: #fde8e8; color: #9c1c1c; }
 
-    .error-msg { background: #fff2f2; border: 1px solid #ffd0d0; border-radius: 10px; padding: 16px; color: #c00; margin-top: 20px; }
-    .new-search-btn { margin-top: 20px; padding: 10px 24px; background: #f5f5f7; color: #1d1d1f; border: 1.5px solid #d2d2d7; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    /* ── 匹配等级徽章 ── */
+    .tier-badge {
+      flex-shrink: 0; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; font-weight: 600; letter-spacing: .03em;
+    }
+    .tier-recommend { background: #e3f6ea; color: #1a7a3c; border: 1px solid #a8e6bb; }
+    .tier-backup    { background: #fff3e0; color: #8a5000; border: 1px solid #ffcc80; }
+    .tier-ref       { background: #f0f0f5; color: #6e6e73; border: 1px solid #d2d2d7; }
+
+    /* ── 分组标题分隔线 ── */
+    .tier-divider {
+      display: flex; align-items: center; gap: 10px;
+      margin: 20px 0 12px; font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em; color: #6e6e73;
+    }
+    .tier-divider::after {
+      content: ''; flex: 1; height: 1px; background: #d2d2d7;
+    }
+
+    /* ── 结果头部 ── */
+    #results-section { display: none; margin-top: 32px; }
+    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .results-header h2 { font-size: 1.3rem; }
+    .export-btn { padding: 8px 20px; background: #34c759; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .export-btn:hover { background: #2fb350; }
+    .new-search-btn { margin-top: 24px; padding: 10px 24px; background: #f5f5f7; color: #1d1d1f; border: 1.5px solid #d2d2d7; border-radius: 8px; font-size: 14px; cursor: pointer; }
     .new-search-btn:hover { background: #e8e8ed; }
+
+    .error-msg { background: #fff2f2; border: 1px solid #ffd0d0; border-radius: 10px; padding: 16px; color: #c00; margin-top: 20px; }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>🎯 Talent Hunter</h1>
-  <p class="subtitle">粘贴岗位描述，AI 自动从 GitHub 筛选匹配人才</p>
+  <p class="subtitle">粘贴岗位描述，AI 自动从 GitHub 实时筛选匹配人才</p>
 
+  <!-- 输入区 -->
   <div id="input-section">
     <textarea id="jd-input" placeholder="粘贴岗位描述（JD）到这里...
 
@@ -77,33 +129,54 @@
     <button class="btn" onclick="startSearch()">开始搜索</button>
   </div>
 
+  <!-- 搜索进度区（含实时卡片） -->
   <div id="progress-section">
-    <h2>正在搜索候选人...</h2>
+    <h2 id="progress-title">正在搜索候选人...</h2>
     <div class="progress-bar-wrap">
       <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
     </div>
     <p class="progress-text" id="progress-text">正在解析岗位描述...</p>
+
+    <!-- 当前正在打分的人 -->
+    <div class="live-status" id="live-status" style="display:none">
+      <div class="spinner"></div>
+      <img class="live-avatar" id="live-avatar" src="" alt="" />
+      <span id="live-name" class="live-name"></span>
+      <span id="live-detail" style="color:#6e6e73"></span>
+    </div>
+
+    <!-- 实时出现的候选人卡片 -->
+    <div id="live-candidates"></div>
   </div>
 
+  <!-- 完成后的结果区 -->
   <div id="results-section">
     <div class="results-header">
       <h2 id="results-title">找到 0 位候选人</h2>
-      <button class="export-btn" id="export-btn" onclick="exportCSV()">导出 CSV</button>
+      <button class="export-btn" onclick="exportCSV()">导出 CSV</button>
     </div>
     <div id="candidates-list"></div>
-    <button class="new-search-btn" onclick="resetSearch()">重新搜索</button>
+    <button class="new-search-btn" onclick="resetSearch()">🔄 重新搜索</button>
   </div>
 </div>
 
 <script>
 let currentJobId = null;
 let pollTimer = null;
+let knownUsernames = new Set();
 
+// 页面加载时确保显示输入区
+document.addEventListener('DOMContentLoaded', () => showSection('input'));
+
+// ── 启动搜索 ──
 function startSearch() {
   const jdText = document.getElementById('jd-input').value.trim();
   if (!jdText) { alert('请先输入岗位描述'); return; }
-  document.getElementById('input-section').querySelector('.btn').disabled = true;
+  document.querySelector('#input-section .btn').disabled = true;
+  knownUsernames.clear();
+  document.getElementById('live-candidates').innerHTML = '';
   showSection('progress');
+
   fetch('/api/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -114,60 +187,170 @@ function startSearch() {
   .catch(err => showError('请求失败：' + err.message));
 }
 
+// ── 轮询状态（每 2 秒） ──
 function pollStatus() {
   if (!currentJobId) return;
   fetch(`/api/status/${currentJobId}`)
     .then(r => r.json())
     .then(data => {
       updateProgress(data);
-      if (data.status === 'done') { loadResults(); }
-      else if (data.status === 'error') { showError('搜索失败：' + (data.error || '未知错误')); }
-      else { pollTimer = setTimeout(pollStatus, 2000); }
+      renderLiveCandidates(data.candidates || []);
+
+      if (data.status === 'done' || (data.total > 0 && data.scored >= data.total)) {
+        finishSearch(data);
+      } else if (data.status === 'error') {
+        showError('搜索失败：' + (data.error || '未知错误'));
+      } else {
+        pollTimer = setTimeout(pollStatus, 2000);
+      }
     })
     .catch(() => { pollTimer = setTimeout(pollStatus, 3000); });
 }
 
+// ── 更新进度条和文字 ──
 function updateProgress(data) {
   const bar = document.getElementById('progress-bar');
   const text = document.getElementById('progress-text');
-  if (data.status === 'searching') {
-    bar.style.width = '30%'; text.textContent = '正在从 GitHub 搜索候选人...';
+  const liveStatus = document.getElementById('live-status');
+
+  if (data.status === 'pending') {
+    bar.style.width = '5%';
+    text.textContent = '正在初始化...';
+    liveStatus.style.display = 'none';
+  } else if (data.status === 'searching') {
+    bar.style.width = '25%';
+    text.textContent = '正在从 GitHub 搜索候选人...';
+    liveStatus.style.display = 'none';
   } else if (data.status === 'scoring') {
-    const pct = data.total > 0 ? Math.round(30 + (data.scored / data.total) * 65) : 30;
+    const pct = data.total > 0 ? Math.round(25 + (data.scored / data.total) * 70) : 30;
     bar.style.width = pct + '%';
-    text.textContent = `正在 AI 打分（${data.scored}/${data.total}）...`;
-  } else {
-    bar.style.width = '10%'; text.textContent = '正在解析岗位描述...';
+    text.textContent = `AI 正在评分 ${data.scored} / ${data.total} 位候选人`;
+    liveStatus.style.display = 'flex';
+  } else if (data.status === 'done') {
+    bar.style.width = '100%';
+    text.textContent = `✅ 完成！共评估 ${data.total} 位候选人`;
+    liveStatus.style.display = 'none';
   }
 }
 
-function loadResults() {
-  fetch(`/api/results/${currentJobId}`)
-    .then(r => r.json())
-    .then(data => { document.getElementById('progress-bar').style.width = '100%'; setTimeout(() => renderResults(data), 300); })
-    .catch(err => showError('加载结果失败：' + err.message));
-}
+// ── 实时追加新候选人卡片（带飞入动画） ──
+function renderLiveCandidates(candidates) {
+  if (!candidates || candidates.length === 0) return;
+  const container = document.getElementById('live-candidates');
 
-function renderResults(data) {
-  const list = document.getElementById('candidates-list');
-  document.getElementById('results-title').textContent = `找到 ${data.total} 位候选人`;
-  list.innerHTML = data.candidates.map(c => {
-    const scoreClass = c.score >= 70 ? 'score-high' : c.score >= 40 ? 'score-mid' : 'score-low';
+  // 实时流展示 score >= 40（推荐+备选），<40 的低分杂质不出现
+  const newOnes = candidates.filter(c => !knownUsernames.has(c.username) && c.score >= 40);
+
+  newOnes.forEach(c => {
+    knownUsernames.add(c.username);
+
+    // 更新「正在打分」提示（显示最新这个人）
+    document.getElementById('live-avatar').src = c.avatar_url;
+    document.getElementById('live-name').textContent = '@' + c.username;
+    document.getElementById('live-detail').textContent =
+      c.score ? `→ ${c.score}分` : '正在评分...';
+
+    // 创建卡片
+    const card = document.createElement('div');
+    card.className = 'candidate-card';
+    card.id = 'card-' + c.username;
+    const scoreClass = c.score >= 80 ? 'score-high' : c.score >= 60 ? 'score-mid' : 'score-low';
+    const tierClass  = c.score >= 60 ? 'tier-recommend' : c.score >= 40 ? 'tier-backup' : 'tier-ref';
+    const tierLabel  = c.tier || (c.score >= 60 ? '推荐' : c.score >= 40 ? '可备选' : '仅供参考');
     const strengths = (c.strengths || []).map(s => `<span class="tag tag-strength">${s}</span>`).join('');
     const gaps = (c.gaps || []).map(g => `<span class="tag tag-gap">${g}</span>`).join('');
-    return `<div class="candidate-card">
-      <img class="avatar" src="${c.avatar_url}" alt="${c.username}" onerror="this.src='https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'"/>
+    card.innerHTML = `
+      <img class="avatar" src="${c.avatar_url}" alt="${c.username}"
+           onerror="this.src='https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'"/>
       <div class="card-body">
         <div class="card-top">
           <span class="rank">#${c.rank}</span>
+          <span class="tier-badge ${tierClass}">${tierLabel}</span>
           <span class="name"><a href="${c.html_url}" target="_blank">@${c.username}</a>${c.company ? ' · ' + c.company : ''}${c.location ? ' · 📍' + c.location : ''}</span>
           <span class="score-badge ${scoreClass}">${c.score}分</span>
         </div>
         <p class="reason">${c.reason}</p>
         <div class="tags">${strengths}${gaps}</div>
+      </div>`;
+
+    container.prepend(card);  // 新卡片出现在顶部
+    // 触发飞入动画
+    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('visible')));
+  });
+}
+
+// ── 渲染单张候选人卡片 HTML ──
+function candidateCardHTML(c) {
+  const scoreClass = c.score >= 80 ? 'score-high' : c.score >= 60 ? 'score-mid' : 'score-low';
+  const tierClass  = c.score >= 60 ? 'tier-recommend' : c.score >= 40 ? 'tier-backup' : 'tier-ref';
+  const tierLabel  = c.tier || (c.score >= 60 ? '推荐' : c.score >= 40 ? '可备选' : '仅供参考');
+  const strengths  = (c.strengths || []).map(s => `<span class="tag tag-strength">${s}</span>`).join('');
+  const gaps       = (c.gaps || []).map(g => `<span class="tag tag-gap">${g}</span>`).join('');
+  return `<div class="candidate-card visible">
+    <img class="avatar" src="${c.avatar_url}" alt="${c.username}"
+         onerror="this.src='https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png'"/>
+    <div class="card-body">
+      <div class="card-top">
+        <span class="rank">#${c.rank}</span>
+        <span class="tier-badge ${tierClass}">${tierLabel}</span>
+        <span class="name"><a href="${c.html_url}" target="_blank">@${c.username}</a>${c.company ? ' · ' + c.company : ''}${c.location ? ' · 📍' + c.location : ''}</span>
+        <span class="score-badge ${scoreClass}">${c.score}分</span>
       </div>
-    </div>`;
-  }).join('');
+      <p class="reason">${c.reason}</p>
+      <div class="tags">${strengths}${gaps}</div>
+    </div>
+  </div>`;
+}
+
+// ── 搜索完成，切换到结果视图 ──
+function finishSearch(data) {
+  const all        = data.candidates || [];
+  const recommended = all.filter(c => c.score >= 60);
+  const backups     = all.filter(c => c.score >= 40 && c.score < 60);
+  const totalScored = data.scored || 0;
+  const hidden      = totalScored - all.length;   // 后端已丢弃的 <40 数量
+
+  const list = document.getElementById('candidates-list');
+
+  // ── 没有任何候选人（极端情况）──────────────────────────────────────────
+  if (all.length === 0) {
+    document.getElementById('results-title').textContent = '未找到匹配候选人';
+    list.innerHTML = `
+      <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:24px;text-align:center;color:#5d4037;">
+        <div style="font-size:2rem;margin-bottom:12px;">🔍</div>
+        <p style="font-size:15px;font-weight:600;margin-bottom:8px;">本次搜索未找到任何候选人</p>
+        <p style="font-size:13px;color:#795548;">共评估 ${totalScored} 位，均因主语言或核心技能不符被过滤</p>
+        <p style="font-size:13px;color:#795548;margin-top:6px;">建议：补充框架名称（如 React、Next.js）或放宽经验年限后重试</p>
+      </div>`;
+    showSection('results');
+    return;
+  }
+
+  // ── 标题统计 ──────────────────────────────────────────────────────────
+  const titleParts = [];
+  if (recommended.length) titleParts.push(`${recommended.length} 位推荐`);
+  if (backups.length)     titleParts.push(`${backups.length} 位可备选`);
+  const hiddenNote = hidden > 0 ? `（${hidden} 位低匹配已过滤）` : '';
+  document.getElementById('results-title').textContent =
+    `找到 ${titleParts.join(' · ')} ${hiddenNote}`;
+
+  // ── 分层渲染 ──────────────────────────────────────────────────────────
+  let html = '';
+
+  if (recommended.length) {
+    html += `<div class="tier-divider">✅ 推荐候选人 · score ≥ 60</div>`;
+    html += recommended.map(candidateCardHTML).join('');
+  }
+
+  if (backups.length) {
+    const backupNote = recommended.length === 0
+      ? '（本次无高匹配候选人，以下为最佳备选）'
+      : '';
+    html += `<div class="tier-divider">📋 可备选 · score 40–59 ${backupNote}</div>`;
+    html += backups.map(candidateCardHTML).join('');
+  }
+
+  list.innerHTML = html;
   showSection('results');
 }
 
@@ -176,7 +359,9 @@ function exportCSV() { if (currentJobId) window.open(`/api/export/${currentJobId
 function resetSearch() {
   if (pollTimer) clearTimeout(pollTimer);
   currentJobId = null;
+  knownUsernames.clear();
   document.getElementById('jd-input').value = '';
+  document.getElementById('live-candidates').innerHTML = '';
   document.getElementById('candidates-list').innerHTML = '';
   document.getElementById('progress-bar').style.width = '0%';
   document.querySelector('#input-section .btn').disabled = false;
@@ -191,8 +376,10 @@ function showSection(name) {
 
 function showError(msg) {
   if (pollTimer) clearTimeout(pollTimer);
-  document.getElementById('progress-section').innerHTML =
-    `<div class="error-msg">❌ ${msg}</div><button class="new-search-btn" onclick="resetSearch()" style="margin-top:16px">重新搜索</button>`;
+  const prog = document.getElementById('progress-section');
+  prog.innerHTML = `<div class="error-msg">❌ ${msg}</div>
+    <button class="new-search-btn" onclick="resetSearch()" style="margin-top:16px">重新搜索</button>`;
+  prog.style.display = '';
 }
 </script>
 </body>
