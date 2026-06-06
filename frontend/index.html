@@ -255,7 +255,7 @@
       <input class="lookup-input" id="lookup-query" type="text"
              placeholder="GitHub 用户名 或 真实姓名（如 gaearon、Dan Abramov）"
              onkeydown="if(event.key==='Enter') submitLookup()" />
-      <span class="lookup-jd-label">对照岗位（可选）— 填写后同时输出与该岗位的匹配分</span>
+      <label class="lookup-jd-label" for="lookup-jd">对照岗位（可选）— 填写后同时输出与该岗位的匹配分</label>
       <textarea class="lookup-jd" id="lookup-jd"
                 placeholder="粘贴岗位描述（选填）..."></textarea>
       <button class="btn" id="lookup-btn" onclick="submitLookup()">查询</button>
