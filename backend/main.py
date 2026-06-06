@@ -13,6 +13,7 @@ from openai import OpenAI
 from job_store import job_store
 from jd_parser import parse_jd
 from github_scraper import GitHubScraper, GITHUB_API
+from gitee_scraper import GiteeScraper
 from scorer import score_candidate
 from models import JobStatus, ScoredCandidate
 
@@ -29,8 +30,9 @@ class SearchRequest(BaseModel):
     jd_text: str
 
 class LookupRequest(BaseModel):
-    query: str          # GitHub username or real name
-    jd_text: str = ""   # optional JD for matching score
+    query: str
+    jd_text: str = ""
+    prefer_source: str = ""   # "github" | "gitee" | "" — hint after disambiguation
 
 def _skill_gap_cap(result, parsed_jd) -> int:
     """核心技能缺失时强制压到 59 分以下（会被 ≥60 过滤掉）。
@@ -260,8 +262,8 @@ async def post_search(req: SearchRequest, background_tasks: BackgroundTasks):
 import re as _re_lookup
 
 def _looks_like_username(q: str) -> bool:
-    """True if query looks like a GitHub username.
-    GitHub rules: alphanumeric + hyphens, no leading/trailing hyphens, ≤39 chars.
+    """True if query looks like a platform username.
+    Alphanumeric + hyphens, no leading/trailing hyphens, ≤39 chars.
     """
     return (
         bool(q)
@@ -272,72 +274,179 @@ def _looks_like_username(q: str) -> bool:
     )
 
 
+def _profile_to_dict(profile) -> dict:
+    """Convert CandidateProfile dataclass to serialisable dict."""
+    return {
+        "username": profile.username,
+        "avatar_url": profile.avatar_url,
+        "html_url": profile.html_url,
+        "bio": profile.bio,
+        "location": profile.location,
+        "company": profile.company,
+        "blog": profile.blog,
+        "public_repos": profile.public_repos,
+        "followers": profile.followers,
+        "languages": profile.languages,
+        "top_repos": [
+            {"name": r.name, "description": r.description,
+             "stars": r.stars, "topics": r.topics}
+            for r in profile.top_repos
+        ],
+        "last_active": profile.last_active,
+    }
+
+
+async def _resolve_github(query: str, prefer: str, scraper, gh_client):
+    """Returns (profile_dict | None, candidates_list). Skips when prefer=='gitee'."""
+    import httpx as _httpx
+    if prefer == "gitee":
+        return None, []
+
+    profile = None
+    if _looks_like_username(query):
+        try:
+            p = await scraper.fetch_candidate_profile(query, client=gh_client)
+            profile = _profile_to_dict(p)
+        except _httpx.HTTPStatusError as e:
+            if e.response.status_code != 404:
+                pass
+        except Exception:
+            pass
+
+    if profile is None:
+        try:
+            resp = await gh_client.get(
+                f"{GITHUB_API}/search/users",
+                params={"q": query, "per_page": 5}
+            )
+            resp.raise_for_status()
+            items = resp.json().get("items", [])
+        except Exception:
+            return None, []
+
+        if not items:
+            return None, []
+
+        user_items = [u for u in items if u.get("type") == "User"]
+        if not user_items:
+            return None, []
+
+        if len(user_items) == 1 or (
+            _looks_like_username(query)
+            and user_items[0]["login"].lower() == query.lower()
+        ):
+            try:
+                p = await scraper.fetch_candidate_profile(user_items[0]["login"], client=gh_client)
+                profile = _profile_to_dict(p)
+            except Exception:
+                return None, []
+        else:
+            candidates = [
+                {
+                    "login": u["login"],
+                    "avatar_url": u.get("avatar_url", ""),
+                    "html_url": u.get("html_url", ""),
+                    "bio": u.get("bio") or "",
+                    "source": "github",
+                }
+                for u in user_items[:5]
+            ]
+            return None, candidates
+
+    return profile, []
+
+
+async def _resolve_gitee(query: str, prefer: str, gitee_scraper, gt_client):
+    """Returns (profile_dict | None, candidates_list). Skips when prefer=='github'."""
+    if prefer == "github":
+        return None, []
+
+    profile = None
+    if _looks_like_username(query):
+        profile = await gitee_scraper.fetch_profile(query, gt_client)
+
+    if profile is None:
+        candidates_raw = await gitee_scraper.search_users(query, gt_client)
+        if not candidates_raw:
+            return None, []
+
+        if len(candidates_raw) == 1 or (
+            _looks_like_username(query)
+            and candidates_raw[0]["login"].lower() == query.lower()
+        ):
+            profile = await gitee_scraper.fetch_profile(candidates_raw[0]["login"], gt_client)
+            if profile is None:
+                return None, candidates_raw
+        else:
+            return None, candidates_raw
+
+    return profile, []
+
+
 @app.post("/api/lookup")
 async def post_lookup(req: LookupRequest):
-    import httpx as _httpx
     query = req.query.strip()
     jd_text = req.jd_text.strip()
+    prefer = req.prefer_source.strip().lower()
 
     groq_client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url="https://api.groq.com/openai/v1")
-    scraper = GitHubScraper(token=os.getenv("GITHUB_TOKEN"))
+    gh_scraper = GitHubScraper(token=os.getenv("GITHUB_TOKEN"))
+    gt_scraper = GiteeScraper(token=os.getenv("GITEE_TOKEN"))
 
-    async with scraper._make_client() as gh_client:
-        # Phase 1: resolve username
-        if _looks_like_username(query):
-            try:
-                profile = await scraper.fetch_candidate_profile(query, client=gh_client)
-            except _httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    profile = None
-                else:
-                    raise HTTPException(status_code=502, detail=f"GitHub API error: {e.response.status_code}")
-            except Exception as e:
-                raise HTTPException(status_code=502, detail=str(e))
-        else:
-            profile = None
+    async with gh_scraper._make_client() as gh_client, \
+               gt_scraper._make_client() as gt_client:
 
-        # Phase 2: search if direct fetch failed or query is a real name
-        if profile is None:
+        (gh_profile, gh_candidates), (gt_profile, gt_candidates) = await asyncio.gather(
+            _resolve_github(query, prefer, gh_scraper, gh_client),
+            _resolve_gitee(query, prefer, gt_scraper, gt_client),
+        )
+
+    all_candidates = gh_candidates + gt_candidates
+
+    if gh_profile is None and gt_profile is None:
+        if all_candidates:
+            return {
+                "status": "ambiguous",
+                "github": None, "gitee": None,
+                "score_result": None, "score_error": None,
+                "candidates": all_candidates,
+            }
+        return {
+            "status": "not_found",
+            "github": None, "gitee": None,
+            "score_result": None, "score_error": None,
+            "candidates": [],
+        }
+
+    # Phase 3: optional JD scoring (GitHub data only)
+    score_result = None
+    score_error = None
+    if jd_text:
+        if gh_profile:
             try:
-                resp = await gh_client.get(
-                    f"{GITHUB_API}/search/users",
-                    params={"q": query, "per_page": 5}
+                from models import CandidateProfile, RepoInfo
+                cp = CandidateProfile(
+                    username=gh_profile["username"],
+                    avatar_url=gh_profile["avatar_url"],
+                    html_url=gh_profile["html_url"],
+                    bio=gh_profile.get("bio", ""),
+                    location=gh_profile.get("location", ""),
+                    company=gh_profile.get("company", ""),
+                    blog=gh_profile.get("blog", ""),
+                    public_repos=gh_profile.get("public_repos", 0),
+                    followers=gh_profile.get("followers", 0),
+                    languages=gh_profile.get("languages", {}),
+                    top_repos=[
+                        RepoInfo(
+                            name=r["name"], description=r.get("description", ""),
+                            stars=r.get("stars", 0), topics=r.get("topics", [])
+                        )
+                        for r in gh_profile.get("top_repos", [])
+                    ],
+                    last_active=gh_profile.get("last_active", ""),
                 )
-                resp.raise_for_status()
-                items = resp.json().get("items", [])
-            except Exception as e:
-                raise HTTPException(status_code=502, detail=f"GitHub search error: {str(e)}")
-
-            if not items:
-                return {"status": "not_found", "profile": None, "score_result": None, "candidates": []}
-
-            if len(items) == 1 or (items and _looks_like_username(query) and items[0]["login"].lower() == query.lower()):
-                try:
-                    profile = await scraper.fetch_candidate_profile(items[0]["login"], client=gh_client)
-                except Exception as e:
-                    raise HTTPException(status_code=502, detail=str(e))
-            else:
-                candidates = [
-                    {
-                        "login": u["login"],
-                        "avatar_url": u.get("avatar_url", ""),
-                        "html_url": u.get("html_url", ""),
-                        "bio": u.get("bio") or "",
-                    }
-                    for u in items[:5]
-                    if u.get("type") == "User"
-                ]
-                if not candidates:
-                    return {"status": "not_found", "profile": None, "score_result": None, "candidates": []}
-                return {"status": "ambiguous", "profile": None, "score_result": None, "candidates": candidates}
-
-        # Phase 3: optional JD scoring
-        score_result = None
-        score_error = None
-        if jd_text:
-            try:
                 parsed_jd = await asyncio.to_thread(parse_jd, jd_text, groq_client)
-                scored = await asyncio.to_thread(score_candidate, profile, parsed_jd, groq_client)
+                scored = await asyncio.to_thread(score_candidate, cp, parsed_jd, groq_client)
                 scored.score = _language_cap(scored, parsed_jd)
                 scored.score = _skill_gap_cap(scored, parsed_jd)
                 scored.score = _adjusted_score(scored)
@@ -349,32 +458,17 @@ async def post_lookup(req: LookupRequest):
                 }
             except Exception as e:
                 score_error = str(e)[:120]
+        else:
+            score_error = "仅有 Gitee 数据，暂不支持评分"
 
-        profile_dict = {
-            "username": profile.username,
-            "avatar_url": profile.avatar_url,
-            "html_url": profile.html_url,
-            "bio": profile.bio,
-            "location": profile.location,
-            "company": profile.company,
-            "blog": profile.blog,
-            "public_repos": profile.public_repos,
-            "followers": profile.followers,
-            "languages": profile.languages,
-            "top_repos": [
-                {"name": r.name, "description": r.description, "stars": r.stars, "topics": r.topics}
-                for r in profile.top_repos
-            ],
-            "last_active": profile.last_active,
-        }
-
-        return {
-            "status": "found",
-            "profile": profile_dict,
-            "score_result": score_result,
-            "score_error": score_error,
-            "candidates": [],
-        }
+    return {
+        "status": "found",
+        "github": gh_profile,
+        "gitee": gt_profile,
+        "score_result": score_result,
+        "score_error": score_error,
+        "candidates": all_candidates,
+    }
 
 
 def _candidate_tier(score: int) -> str:
